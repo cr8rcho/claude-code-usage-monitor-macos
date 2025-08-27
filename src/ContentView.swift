@@ -14,7 +14,7 @@ struct ContentView: View {
             
             // Scrollable content
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 10) {
                     if monitor.hasActiveSession {
                         SessionInfoView()
                         
@@ -25,8 +25,16 @@ struct ContentView: View {
                         PredictionView()
                         
                         AutoLoginView()
+                        .padding(.top, 10)
+                        
+                        ScheduledTaskView()
                     } else {
                         NoSessionView()
+
+                        AutoLoginView()
+                        .padding(.top, 10)
+
+                        ScheduledTaskView()
                     }
                 }
                 .padding(.horizontal)
@@ -34,7 +42,7 @@ struct ContentView: View {
                 .padding(.top, 8)
             }
         }
-        .frame(width: 400, height: 565)
+        .frame(width: 400, height: 535)
     }
 }
 
@@ -461,6 +469,210 @@ struct AutoLoginView: View {
     
     private func updateLaunchAtLoginState() {
         launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+}
+
+struct ScheduledTaskView: View {
+    @StateObject private var taskManager = ScheduledTaskManager()
+    @State private var showSettings = false
+    @State private var tempWorkingDirectory = ""
+    @State private var tempCommand = ""
+    
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+    
+    private func formatTime(_ date: Date) -> String {
+        return Self.timeFormatter.string(from: date)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Auto Claude Launch")
+                    .font(.caption)
+                
+                Spacer()
+                
+                Toggle("", isOn: Binding(
+                    get: { taskManager.isEnabled },
+                    set: { taskManager.setEnabled($0) }
+                ))
+                    .toggleStyle(.switch)
+                    .scaleEffect(0.8)
+            }
+            
+            if taskManager.isEnabled {
+                HStack {
+                    Text("Next run: \(taskManager.getNextRunString())")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                }
+                
+                // Execution status
+                HStack {
+                    Text(taskManager.getExecutionStatusString())
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(Color(nsColor: taskManager.getExecutionStatusColor()))
+                    
+                    Spacer()
+                    
+                    Button("Test Now") {
+                        taskManager.testClaudeCommand()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                }
+                .padding(.top, 2)
+                
+                // Settings section
+                if showSettings {
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Schedule Time
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Schedule Time:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            DatePicker("", selection: Binding(
+                                get: { taskManager.scheduledTime },
+                                set: { taskManager.setTime($0) }
+                            ), displayedComponents: [.hourAndMinute])
+                                .datePickerStyle(.stepperField)
+                                .labelsHidden()
+                        }
+                        
+                        // Working Directory
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Working Directory:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            HStack {
+                                TextField("Working Directory", text: $tempWorkingDirectory)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .onTapGesture {
+                                        // Force focus for better keyboard support
+                                    }
+                                
+                                Button("📋") {
+                                    if let clipboardContent = NSPasteboard.general.string(forType: .string) {
+                                        var cleanedPath = clipboardContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        // Remove surrounding quotes if present
+                                        if (cleanedPath.hasPrefix("'") && cleanedPath.hasSuffix("'")) ||
+                                           (cleanedPath.hasPrefix("\"") && cleanedPath.hasSuffix("\"")) {
+                                            cleanedPath = String(cleanedPath.dropFirst().dropLast())
+                                        }
+                                        tempWorkingDirectory = cleanedPath
+                                    }
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Paste from clipboard")
+                            }
+                        }
+                        
+                        // Command
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Claude Command:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            HStack {
+                                TextField("Command", text: $tempCommand)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .onTapGesture {
+                                        // Force focus for better keyboard support
+                                    }
+                                
+                                Button("📋") {
+                                    if let clipboardContent = NSPasteboard.general.string(forType: .string) {
+                                        var cleanedCommand = clipboardContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        // Remove surrounding quotes if present
+                                        if (cleanedCommand.hasPrefix("'") && cleanedCommand.hasSuffix("'")) ||
+                                           (cleanedCommand.hasPrefix("\"") && cleanedCommand.hasSuffix("\"")) {
+                                            cleanedCommand = String(cleanedCommand.dropFirst().dropLast())
+                                        }
+                                        tempCommand = cleanedCommand
+                                    }
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Paste from clipboard")
+                            }
+                        }
+                        
+                        // Save button
+                        HStack {
+                            Spacer()
+                            
+                            Button("Save Settings") {
+                                // Clean the working directory path before saving
+                                var cleanedDir = tempWorkingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if (cleanedDir.hasPrefix("'") && cleanedDir.hasSuffix("'")) ||
+                                   (cleanedDir.hasPrefix("\"") && cleanedDir.hasSuffix("\"")) {
+                                    cleanedDir = String(cleanedDir.dropFirst().dropLast())
+                                }
+                                
+                                // Clean the command before saving
+                                var cleanedCmd = tempCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if (cleanedCmd.hasPrefix("'") && cleanedCmd.hasSuffix("'")) ||
+                                   (cleanedCmd.hasPrefix("\"") && cleanedCmd.hasSuffix("\"")) {
+                                    cleanedCmd = String(cleanedCmd.dropFirst().dropLast())
+                                }
+                                
+                                taskManager.saveWorkingDirectory(cleanedDir)
+                                taskManager.saveCommand(cleanedCmd)
+                                showSettings = false
+                            }
+                            .font(.caption)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                    }
+                    .padding(.top, 8)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+                    .background(Color.gray.opacity(0.05))
+                    .cornerRadius(6)
+                }
+                
+                // Settings toggle
+                Button(action: {
+                    if !showSettings {
+                        tempWorkingDirectory = taskManager.workingDirectory
+                        tempCommand = taskManager.command
+                    }
+                    showSettings.toggle()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "gear")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Settings")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Image(systemName: showSettings ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(8)
+        .onAppear {
+            taskManager.requestNotificationPermission()
+        }
     }
 }
 

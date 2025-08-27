@@ -15,18 +15,18 @@ EXEC_X86_64 = $(BUILD_X86_64)/release/$(EXEC_NAME)
 OUTPUT_DIR = output
 BUNDLE_DIR = $(OUTPUT_DIR)/$(APP_NAME).app
 
-SOUCES = $(wildcard src/*.swift)
+SOURCES = $(wildcard src/*.swift)
 
 # Default target
 .PHONY: all
 all: build
 
 # Build for ARM64 architecture
-$(EXEC_ARM64): $(SOUCES)
+$(EXEC_ARM64): $(SOURCES)
 	@swift build --arch arm64 --configuration release --build-path $(BUILD_ARM64)
 
 # Build for x86_64 architecture
-$(EXEC_X86_64): $(SOUCES)
+$(EXEC_X86_64): $(SOURCES)
 	@swift build --arch x86_64 --configuration release --build-path $(BUILD_X86_64)
 
 # Build universal binary
