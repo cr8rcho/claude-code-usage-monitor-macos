@@ -181,7 +181,7 @@ class ScheduledTaskManager: ObservableObject {
                 } else {
                     self.lastExecutionStatus = .success(executionDate)
                     self.saveExecutionStatus(.success(executionDate))
-                    self.showNotification(title: "Claude Auto Launch", body: "Opened Terminal and executed 'claude \(self.command)' command")
+                    self.showNotification(title: "Claude Auto Launch", body: "Executed '\(self.command)' in Terminal")
                     print("Terminal opened and claude command executed at \(executionDate)")
                 }
             }
