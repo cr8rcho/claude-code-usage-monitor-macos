@@ -1,13 +1,13 @@
 import Foundation
 
-// セッション関連の計算ロジックを担当
+// Handles session-related calculation logic
 struct SessionCalculator {
     
-    // 使用状況のスナップショットを計算
+    // Calculate usage snapshot
     func calculateUsageSnapshot(from entries: [UsageEntry], tokenLimit: Int, now: Date) -> UsageSnapshot? {
         let sessionBlocks = identifySessionBlocks(from: entries)
         
-        // アクティブなセッションを見つける
+        // Find active session
         guard let activeSession = sessionBlocks.first(where: { $0.isActive }) else {
             return nil
         }
@@ -45,7 +45,7 @@ struct SessionCalculator {
         return formatter.string(from: date)
     }
     
-    // セッションブロックを識別
+    // Identify session blocks
     func identifySessionBlocks(from entries: [UsageEntry]) -> [SessionBlock] {
         guard !entries.isEmpty else { return [] }
         
@@ -92,7 +92,7 @@ struct SessionCalculator {
         return blocks
     }
     
-    // バーンレート計算（過去1時間）
+    // Calculate burn rate (last hour)
     func calculateBurnRate(from sessionBlocks: [SessionBlock], now: Date) -> Double {
         let oneHourAgo = now.addingTimeInterval(-60 * 60)
         var totalTokensInHour: Double = 0
@@ -119,14 +119,14 @@ struct SessionCalculator {
         return totalTokensInHour / 60.0
     }
     
-    // プラン検出
+    // Detect plan
     func detectPlan(from blocks: [SessionBlock]) -> (planType: PlanType, tokenLimit: Int) {
         let maxSessionTokens = blocks.map { $0.displayTokens }.max() ?? 0
         let (type, limit) = PlanType.detect(from: maxSessionTokens)
         return (planType: type, tokenLimit: limit)
     }
     
-    // モデル別の詳細を計算
+    // Calculate model breakdown
     func calculateModelBreakdown(from sessionBlock: SessionBlock) -> [ModelBreakdown] {
         var breakdowns: [ModelBreakdown] = []
         
@@ -170,7 +170,7 @@ struct SessionCalculator {
         }
     }
     
-    // 残り時間計算
+    // Calculate time remaining
     func calculateTimeRemaining(currentTokens: Int, tokenLimit: Int, burnRate: Double, sessionEndTime: Date) -> String {
         guard currentTokens < tokenLimit else {
             return "Exceeded"

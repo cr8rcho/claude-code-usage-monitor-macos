@@ -31,7 +31,7 @@ class ClaudeUsageMonitor: ObservableObject {
         }
     }
     
-    // DateFormatterのキャッシュ
+    // DateFormatter cache
     private static let sharedTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
@@ -44,14 +44,14 @@ class ClaudeUsageMonitor: ObservableObject {
         let usageData = await dataLoader.loadUsageData()
         let now = Date()
         
-        // スナップショットを計算
+        // Calculate snapshot
         guard let snapshot = sessionCalculator.calculateUsageSnapshot(from: usageData, tokenLimit: tokenLimit, now: now) else {
-            // アクティブセッションがない場合
+            // No active session
             resetSession(now: now)
             return
         }
         
-        // 全プロパティを原子的に更新
+        // Update all properties atomically
         applySnapshot(snapshot)
     }
     
@@ -66,7 +66,7 @@ class ClaudeUsageMonitor: ObservableObject {
         modelBreakdown = snapshot.modelBreakdown
         currentSessionBlock = snapshot.currentSessionBlock
         
-        // プランの更新
+        // Update plan
         detectedPlanType = snapshot.detectedPlanType
         if !isManualPlanMode {
             planType = snapshot.detectedPlanType

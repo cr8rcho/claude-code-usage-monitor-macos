@@ -2,16 +2,16 @@ import Foundation
 
 enum FastISO8601DateParser {
     static func parse(_ string: String) -> Date? {
-        // ISO8601形式: "2025-07-04T12:34:56.789Z" または "2025-07-04T12:34:56Z"
+        // ISO8601 format: "2025-07-04T12:34:56.789Z" or "2025-07-04T12:34:56Z"
         guard string.count >= 20 else { return nil }
         
         let chars = Array(string)
         
-        // 年月日時分秒の数値を直接パース
+        // Parse year/month/day/hour/minute/second directly
         guard chars[4] == "-" && chars[7] == "-" && chars[10] == "T" &&
               chars[13] == ":" && chars[16] == ":" else { return nil }
         
-        // 数値を高速に変換（文字コードから直接計算）
+        // Fast number conversion (direct calculation from character codes)
         func twoDigits(at index: Int) -> Int? {
             let c1 = chars[index].asciiValue, c2 = chars[index + 1].asciiValue
             guard let c1, let c2, c1 >= 48 && c1 <= 57, c2 >= 48 && c2 <= 57 else { return nil }
@@ -34,7 +34,7 @@ enum FastISO8601DateParser {
               let minute = twoDigits(at: 14),
               let second = twoDigits(at: 17) else { return nil }
         
-        // 小数秒の処理
+        // Process fractional seconds
         var nanoseconds = 0
         var endIndex = 19
         
@@ -51,10 +51,10 @@ enum FastISO8601DateParser {
             }
         }
         
-        // タイムゾーンの確認（"Z" または "+00:00" など）
+        // Verify timezone ("Z" or "+00:00" etc)
         guard endIndex < chars.count && (chars[endIndex] == "Z" || chars[endIndex] == "+" || chars[endIndex] == "-") else { return nil }
         
-        // DateComponentsを使ってDateを作成
+        // Create Date using DateComponents
         var components = DateComponents()
         components.year = year
         components.month = month

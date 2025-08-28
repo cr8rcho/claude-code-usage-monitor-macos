@@ -1,6 +1,6 @@
 import Cocoa
 
-// アプリケーションの起動
+// Launch the application
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

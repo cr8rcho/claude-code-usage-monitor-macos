@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// ポップオーバーの管理を担当
+// Manages popover display
 class PopoverController {
     private let popover: NSPopover
     private var eventMonitor: EventMonitor?

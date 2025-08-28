@@ -138,13 +138,6 @@ class ScheduledTaskManager: ObservableObject {
         if let timer = timer {
             RunLoop.main.add(timer, forMode: .common)
         }
-        
-        // Schedule the next day's task
-        let nextDayDate = calendar.date(byAdding: .day, value: 1, to: targetDate)
-        if let nextDay = nextDayDate {
-            let nextDayTimer = Timer(fireAt: nextDay, interval: 0, target: self, selector: #selector(rescheduleForNextDay), userInfo: nil, repeats: false)
-            RunLoop.main.add(nextDayTimer, forMode: .common)
-        }
     }
     
     @objc private func executeClaudeCommand() {
@@ -170,7 +163,7 @@ class ScheduledTaskManager: ObservableObject {
         var errorDict: NSDictionary?
         
         DispatchQueue.global(qos: .background).async {
-            let result = appleScript?.executeAndReturnError(&errorDict)
+            _ = appleScript?.executeAndReturnError(&errorDict)
             
             DispatchQueue.main.async {
                 if let error = errorDict {
@@ -193,13 +186,6 @@ class ScheduledTaskManager: ObservableObject {
         }
     }
     
-    @objc private func rescheduleForNextDay() {
-        if isEnabled {
-            DispatchQueue.main.async {
-                self.scheduleTask()
-            }
-        }
-    }
     
     private func stopTask() {
         timer?.invalidate()
@@ -299,7 +285,7 @@ class ScheduledTaskManager: ObservableObject {
             let formatter = DateFormatter()
             formatter.dateFormat = "MMM d, HH:mm"
             return "❌ Failed: \(formatter.string(from: date)) - \(error)"
-        case .running(let date):
+        case .running(_):
             return "🔄 Running..."
         }
     }

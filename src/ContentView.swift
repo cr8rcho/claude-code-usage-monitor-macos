@@ -10,7 +10,7 @@ struct ContentView: View {
             HeaderView()
                 .padding(.horizontal)
                 .padding(.top)
-                .padding(.bottom, 8)
+                .padding(.bottom, 12)
             
             // Scrollable content
             ScrollView {
@@ -46,6 +46,7 @@ struct ContentView: View {
     }
 }
 
+//MARK: - Header View
 struct HeaderView: View {
     @EnvironmentObject var monitor: ClaudeUsageMonitor
     @State private var isHoveringPower = false
@@ -134,10 +135,11 @@ struct HeaderView: View {
     }
 }
 
+//MARK: - Session Info Views
 struct SessionInfoView: View {
     @EnvironmentObject var monitor: ClaudeUsageMonitor
     
-    // DateFormatterのキャッシュ
+    // DateFormatter cache
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
@@ -199,6 +201,7 @@ struct SessionInfoView: View {
     }
 }
 
+//MARK: - Token Usage Views
 struct TokenUsageView: View {
     @EnvironmentObject var monitor: ClaudeUsageMonitor
     
@@ -250,6 +253,7 @@ struct TokenUsageView: View {
     }
 }
 
+//MARK: - Burn Rate View
 struct BurnRateView: View {
     @EnvironmentObject var monitor: ClaudeUsageMonitor
     
@@ -304,6 +308,7 @@ struct BurnRateView: View {
     }
 }
 
+//MARK: - Prediction View
 struct PredictionView: View {
     @EnvironmentObject var monitor: ClaudeUsageMonitor
     
@@ -358,6 +363,7 @@ struct PredictionView: View {
     }
 }
 
+//MARK: - Colored Progress
 struct ColoredProgressViewStyle: ProgressViewStyle {
     let color: Color
     
@@ -366,12 +372,12 @@ struct ColoredProgressViewStyle: ProgressViewStyle {
             ZStack(alignment: .leading) {
                 Rectangle()
                     .fill(Color.gray.opacity(0.3))
-                    .frame(height: 20)
+                    .frame(height: 16)
                     .cornerRadius(10)
                 
                 Rectangle()
                     .fill(color)
-                    .frame(width: geometry.size.width * (configuration.fractionCompleted ?? 0), height: 20)
+                    .frame(width: geometry.size.width * (configuration.fractionCompleted ?? 0), height: 16)
                     .cornerRadius(10)
             }
         }
@@ -379,6 +385,7 @@ struct ColoredProgressViewStyle: ProgressViewStyle {
     }
 }
 
+//MARK: - No Session View
 struct NoSessionView: View {
     var body: some View {
         VStack(spacing: 20) {
@@ -420,6 +427,7 @@ struct NoSessionView: View {
     }
 }
 
+//MARK: - Auto Login View
 struct AutoLoginView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     
@@ -427,7 +435,7 @@ struct AutoLoginView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Launch at login")
-                    .font(.caption)
+                    .font(.headline)
                 
                 Spacer()
                 
@@ -472,6 +480,7 @@ struct AutoLoginView: View {
     }
 }
 
+//MARK: - Scheduled Task View
 struct ScheduledTaskView: View {
     @StateObject private var taskManager = ScheduledTaskManager()
     @State private var showSettings = false
@@ -491,8 +500,8 @@ struct ScheduledTaskView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Auto Claude Launch")
-                    .font(.caption)
+                Text("Scheduled Claude Code")
+                    .font(.headline)
                 
                 Spacer()
                 
@@ -530,7 +539,31 @@ struct ScheduledTaskView: View {
                 }
                 .padding(.top, 2)
                 
-                // Settings section
+                // Settings toggle
+                Button(action: {
+                    if !showSettings {
+                        tempWorkingDirectory = taskManager.workingDirectory
+                        tempCommand = taskManager.command
+                    }
+                    showSettings.toggle()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "gear")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Settings")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Image(systemName: showSettings ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+
+                                // Settings section
                 if showSettings {
                     VStack(alignment: .leading, spacing: 8) {
                         // Schedule Time
@@ -641,30 +674,6 @@ struct ScheduledTaskView: View {
                     .background(Color.gray.opacity(0.05))
                     .cornerRadius(6)
                 }
-                
-                // Settings toggle
-                Button(action: {
-                    if !showSettings {
-                        tempWorkingDirectory = taskManager.workingDirectory
-                        tempCommand = taskManager.command
-                    }
-                    showSettings.toggle()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "gear")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("Settings")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Image(systemName: showSettings ? "chevron.up" : "chevron.down")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
             }
         }
         .padding()
@@ -676,6 +685,7 @@ struct ScheduledTaskView: View {
     }
 }
 
+//MARK: - Model Breakdown View
 struct ModelBreakdownView: View {
     @EnvironmentObject var monitor: ClaudeUsageMonitor
     
@@ -737,7 +747,7 @@ struct ModelBreakdownView: View {
                         }
                     }
                     
-                    // キャッシュトークンがある場合のみ表示
+                    // Only show if cache tokens exist
                     if breakdown.cacheCreationTokens > 0 || breakdown.cacheReadTokens > 0 {
                         HStack(spacing: 8) {
                             Image(systemName: "info.circle")

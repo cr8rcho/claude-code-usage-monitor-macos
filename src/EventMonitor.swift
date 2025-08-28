@@ -1,6 +1,6 @@
 import Cocoa
 
-// グローバルイベント監視を担当
+// Handles global event monitoring
 class EventMonitor {
     private var monitor: Any?
     private let mask: NSEvent.EventTypeMask

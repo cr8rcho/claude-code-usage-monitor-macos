@@ -32,10 +32,10 @@ actor ClaudeDataLoader {
     func loadUsageData() async -> [UsageEntry] {
         processedHashes.removeAll()
         
-        // 全JSONLファイルを一度に収集
+        // Collect all JSONL files at once
         let allJSONLFiles = findAllJSONLFiles()
         
-        // 並行処理でファイルを読み込み
+        // Load files with parallel processing
         var entries = await withTaskGroup(of: [UsageEntry].self) { group in
             for fileURL in allJSONLFiles {
                 group.addTask { [weak self] in
@@ -95,23 +95,23 @@ actor ClaudeDataLoader {
         var entries: [UsageEntry] = []
         
         do {
-            // メモリマップドファイルとして読み込み
+            // Load as memory-mapped file
             let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
             
-            // 改行で分割しながら処理
+            // Process while splitting by newlines
             var currentIndex = data.startIndex
             
             while currentIndex < data.endIndex {
-                // 次の改行を探す
+                // Find next newline
                 let nextNewline = data[currentIndex...].firstIndex(of: 0x0A) ?? data.endIndex
                 
                 if nextNewline > currentIndex {
                     let lineData = data[currentIndex..<nextNewline]
                     
-                    // 空行をスキップ
+                    // Skip empty lines
                     if !lineData.isEmpty {
                         if let entry = parseJSONData(lineData) {
-                            // 重複チェック
+                            // Duplicate check
                             if let hash = entry.uniqueHash {
                                 if !processedHashes.contains(hash) {
                                     processedHashes.insert(hash)
@@ -127,14 +127,14 @@ actor ClaudeDataLoader {
                 currentIndex = nextNewline.advanced(by: 1)
             }
         } catch {
-            // エラーは無視して続行
+            // Ignore errors and continue
         }
         
         return entries
     }
     
     private func parseJSONData(_ data: Data) -> UsageEntry? {
-        // 手動でJSONをパース（必要なフィールドのみ）
+        // Manually parse JSON (only required fields)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
@@ -144,31 +144,31 @@ actor ClaudeDataLoader {
             return nil
         }
         
-        // タイムスタンプ（必須）
+        // Timestamp (required)
         guard let timestampString = json["timestamp"] as? String else {
             return nil
         }
         
-        // 高速な日付パース
+        // Fast date parsing
         guard let finalTimestamp = FastISO8601DateParser.parse(timestampString) else {
             return nil
         }
         
-        // usage データの取得（ネストチェックを最小化）
+        // Get usage data (minimize nest checking)
         let usage = (json["usage"] as? [String: Any]) ?? 
                    ((json["message"] as? [String: Any])?["usage"] as? [String: Any])
         
-        // トークン数（デフォルト0）
+        // Token counts (default 0)
         let inputTokens = usage?["input_tokens"] as? Int ?? 0
         let outputTokens = usage?["output_tokens"] as? Int ?? 0
         let cacheCreationTokens = usage?["cache_creation_input_tokens"] as? Int ?? 0
         let cacheReadTokens = usage?["cache_read_input_tokens"] as? Int ?? 0
         
-        // モデル名
+        // Model name
         let model = (json["model"] as? String) ?? 
                    ((json["message"] as? [String: Any])?["model"] as? String)
         
-        // ID（重複チェック用）
+        // ID (for duplicate checking)
         let messageId = ((json["message"] as? [String: Any])?["id"] as? String) ?? 
                        (json["message_id"] as? String)
         let requestId = (json["requestId"] as? String) ?? (json["request_id"] as? String)

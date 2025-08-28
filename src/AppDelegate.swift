@@ -8,7 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // アプリをUIElementとして設定（Dockに表示しない）
+        // Set app as UIElement (hide from Dock)
         NSApp.setActivationPolicy(.accessory)
         
         // Initialize core components
@@ -25,12 +25,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             statusButton: menuBarController.statusItem.button!
         )
         
-        // タイマーを設定（6秒間隔）
+        // Set timer (6 second interval)
         timer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: true) { [weak self] _ in
             self?.scheduleUpdate()
         }
         
-        // 初回の使用量を更新
+        // Update initial usage
         scheduleUpdate()
     }
     

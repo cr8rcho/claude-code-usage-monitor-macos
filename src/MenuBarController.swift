@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// メニューバーのUI管理を担当
+// Manages menu bar UI
 class MenuBarController {
     let statusItem: NSStatusItem
     private weak var usageMonitor: ClaudeUsageMonitor?
