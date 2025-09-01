@@ -147,8 +147,15 @@ class ScheduledTaskManager: ObservableObject {
             self.lastExecutionStatus = .running(executionDate)
         }
         
-        // Open Terminal and execute claude command
+        // Force kill Terminal if running, then open fresh and execute claude command
         let script = """
+        tell application "System Events"
+            if exists (processes where name is "Terminal") then
+                do shell script "killall Terminal"
+                delay 1
+            end if
+        end tell
+        
         tell application "Terminal"
             activate
             if (count of windows) = 0 then
