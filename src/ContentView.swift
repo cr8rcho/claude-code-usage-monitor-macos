@@ -483,9 +483,8 @@ struct AutoLoginView: View {
 //MARK: - Scheduled Task View
 struct ScheduledTaskView: View {
     @StateObject private var taskManager = ScheduledTaskManager()
-    @State private var showSettings = false
-    @State private var tempWorkingDirectory = ""
-    @State private var tempCommand = ""
+    @State private var expandedTasks: Set<UUID> = []
+    @State private var editingTasks: [UUID: (workingDirectory: String, command: String)] = [:]
     
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -505,175 +504,66 @@ struct ScheduledTaskView: View {
                 
                 Spacer()
                 
-                Toggle("", isOn: Binding(
-                    get: { taskManager.isEnabled },
-                    set: { taskManager.setEnabled($0) }
-                ))
-                    .toggleStyle(.switch)
-                    .scaleEffect(0.8)
-            }
-            
-            if taskManager.isEnabled {
-                HStack {
-                    Text("Next run: \(taskManager.getNextRunString())")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                }
-                
-                // Execution status
-                HStack {
-                    Text(taskManager.getExecutionStatusString())
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(Color(nsColor: taskManager.getExecutionStatusColor()))
-                    
-                    Spacer()
-                    
-                    Button("Test Now") {
-                        taskManager.testClaudeCommand()
-                    }
-                    .font(.caption)
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                }
-                .padding(.top, 2)
-                
-                // Settings toggle
                 Button(action: {
-                    if !showSettings {
-                        tempWorkingDirectory = taskManager.workingDirectory
-                        tempCommand = taskManager.command
-                    }
-                    showSettings.toggle()
+                    let newTask = taskManager.addTask()
+                    expandedTasks.insert(newTask.id)
+                    editingTasks[newTask.id] = (workingDirectory: newTask.workingDirectory, command: newTask.command)
                 }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "gear")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("Settings")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Image(systemName: showSettings ? "chevron.up" : "chevron.down")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.accentColor)
+                        .imageScale(.large)
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 4)
-
-                                // Settings section
-                if showSettings {
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Schedule Time
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Schedule Time:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            DatePicker("", selection: Binding(
-                                get: { taskManager.scheduledTime },
-                                set: { taskManager.setTime($0) }
-                            ), displayedComponents: [.hourAndMinute])
-                                .datePickerStyle(.stepperField)
-                                .labelsHidden()
-                        }
-                        
-                        // Working Directory
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Working Directory:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            HStack {
-                                TextField("Working Directory", text: $tempWorkingDirectory)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .onTapGesture {
-                                        // Force focus for better keyboard support
+                .help("Add new schedule")
+            }
+            
+            if taskManager.scheduledTasks.isEmpty {
+                Text("No schedules configured")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 8)
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(taskManager.scheduledTasks) { task in
+                            ScheduledTaskItemView(
+                                task: task,
+                                taskManager: taskManager,
+                                isExpanded: expandedTasks.contains(task.id),
+                                editingValues: Binding(
+                                    get: { editingTasks[task.id] ?? (workingDirectory: task.workingDirectory, command: task.command) },
+                                    set: { editingTasks[task.id] = $0 }
+                                ),
+                                onToggleExpand: {
+                                    if expandedTasks.contains(task.id) {
+                                        expandedTasks.remove(task.id)
+                                        editingTasks.removeValue(forKey: task.id)
+                                    } else {
+                                        expandedTasks.insert(task.id)
+                                        editingTasks[task.id] = (workingDirectory: task.workingDirectory, command: task.command)
                                     }
-                                
-                                Button("📋") {
-                                    if let clipboardContent = NSPasteboard.general.string(forType: .string) {
-                                        var cleanedPath = clipboardContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        // Remove surrounding quotes if present
-                                        if (cleanedPath.hasPrefix("'") && cleanedPath.hasSuffix("'")) ||
-                                           (cleanedPath.hasPrefix("\"") && cleanedPath.hasSuffix("\"")) {
-                                            cleanedPath = String(cleanedPath.dropFirst().dropLast())
-                                        }
-                                        tempWorkingDirectory = cleanedPath
-                                    }
-                                }
-                                .buttonStyle(.borderless)
-                                .help("Paste from clipboard")
-                            }
-                        }
-                        
-                        // Command
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Claude Command:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            HStack {
-                                TextField("Command", text: $tempCommand)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .onTapGesture {
-                                        // Force focus for better keyboard support
-                                    }
-                                
-                                Button("📋") {
-                                    if let clipboardContent = NSPasteboard.general.string(forType: .string) {
-                                        var cleanedCommand = clipboardContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        // Remove surrounding quotes if present
-                                        if (cleanedCommand.hasPrefix("'") && cleanedCommand.hasSuffix("'")) ||
-                                           (cleanedCommand.hasPrefix("\"") && cleanedCommand.hasSuffix("\"")) {
-                                            cleanedCommand = String(cleanedCommand.dropFirst().dropLast())
-                                        }
-                                        tempCommand = cleanedCommand
+                                },
+                                onDelete: {
+                                    taskManager.deleteTask(task)
+                                    expandedTasks.remove(task.id)
+                                    editingTasks.removeValue(forKey: task.id)
+                                },
+                                onSave: {
+                                    if let editing = editingTasks[task.id] {
+                                        var updatedTask = task
+                                        updatedTask.workingDirectory = editing.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        updatedTask.command = editing.command.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        taskManager.updateTask(updatedTask)
+                                        expandedTasks.remove(task.id)
+                                        editingTasks.removeValue(forKey: task.id)
                                     }
                                 }
-                                .buttonStyle(.borderless)
-                                .help("Paste from clipboard")
-                            }
-                        }
-                        
-                        // Save button
-                        HStack {
-                            Spacer()
-                            
-                            Button("Save Settings") {
-                                // Clean the working directory path before saving
-                                var cleanedDir = tempWorkingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
-                                if (cleanedDir.hasPrefix("'") && cleanedDir.hasSuffix("'")) ||
-                                   (cleanedDir.hasPrefix("\"") && cleanedDir.hasSuffix("\"")) {
-                                    cleanedDir = String(cleanedDir.dropFirst().dropLast())
-                                }
-                                
-                                // Clean the command before saving
-                                var cleanedCmd = tempCommand.trimmingCharacters(in: .whitespacesAndNewlines)
-                                if (cleanedCmd.hasPrefix("'") && cleanedCmd.hasSuffix("'")) ||
-                                   (cleanedCmd.hasPrefix("\"") && cleanedCmd.hasSuffix("\"")) {
-                                    cleanedCmd = String(cleanedCmd.dropFirst().dropLast())
-                                }
-                                
-                                taskManager.saveWorkingDirectory(cleanedDir)
-                                taskManager.saveCommand(cleanedCmd)
-                                showSettings = false
-                            }
-                            .font(.caption)
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
+                            )
                         }
                     }
-                    .padding(.top, 8)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
-                    .background(Color.gray.opacity(0.05))
-                    .cornerRadius(6)
                 }
+                .frame(maxHeight: 300)
+                
             }
         }
         .padding()
@@ -682,6 +572,183 @@ struct ScheduledTaskView: View {
         .onAppear {
             taskManager.requestNotificationPermission()
         }
+    }
+}
+
+//MARK: - Scheduled Task Item View
+struct ScheduledTaskItemView: View {
+    let task: ScheduledTask
+    let taskManager: ScheduledTaskManager
+    let isExpanded: Bool
+    @Binding var editingValues: (workingDirectory: String, command: String)
+    let onToggleExpand: () -> Void
+    let onDelete: () -> Void
+    let onSave: () -> Void
+    
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header row
+            HStack(spacing: 8) {
+                Toggle("", isOn: Binding(
+                    get: { task.isEnabled },
+                    set: { taskManager.setTaskEnabled(task, $0) }
+                ))
+                .toggleStyle(.switch)
+                .scaleEffect(0.7)
+                .padding(.leading, -12)
+                
+                Text(Self.timeFormatter.string(from: task.time))
+                    .font(.system(.caption, design: .monospaced))
+                    .fontWeight(.medium)
+                
+                Text(task.command)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                Button(action: onToggleExpand) {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .foregroundColor(.secondary)
+                        .imageScale(.medium)
+                }
+                .buttonStyle(.plain)
+                
+                Button(action: onDelete) {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundColor(.red.opacity(0.9))
+                        .imageScale(.medium)
+                }
+                .buttonStyle(.plain)
+                .help("Delete schedule")
+            }
+            
+            // Status row when enabled
+            if task.isEnabled {
+                HStack {
+                    Text("Next: \(taskManager.getNextRunString(task))")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Text(taskManager.getExecutionStatusString(task))
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(nsColor: taskManager.getExecutionStatusColor(task)))
+                }
+            }
+            
+            // Expanded settings
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Time picker
+                    HStack {
+                        Text("Time")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        
+                        DatePicker("", selection: Binding(
+                            get: { task.time },
+                            set: { newTime in
+                                var updatedTask = task
+                                updatedTask.time = newTime
+                                taskManager.updateTask(updatedTask)
+                            }
+                        ), displayedComponents: [.hourAndMinute])
+                        .datePickerStyle(.stepperField)
+                        .labelsHidden()
+                    }
+                    
+                    // Working Directory
+                    HStack {
+                        Text("Directory")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        
+                        TextField("Working Directory", text: $editingValues.workingDirectory)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+                        
+                        Button("📋") {
+                            if let clipboardContent = NSPasteboard.general.string(forType: .string) {
+                                var cleanedPath = clipboardContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if (cleanedPath.hasPrefix("'") && cleanedPath.hasSuffix("'")) ||
+                                   (cleanedPath.hasPrefix("\"") && cleanedPath.hasSuffix("\"")) {
+                                    cleanedPath = String(cleanedPath.dropFirst().dropLast())
+                                }
+                                editingValues.workingDirectory = cleanedPath
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Paste from clipboard")
+                    }
+                    
+                    // Command
+                    HStack {
+                        Text("Command")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        
+                        TextField("Command", text: $editingValues.command)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+                        
+                        Button("📋") {
+                            if let clipboardContent = NSPasteboard.general.string(forType: .string) {
+                                var cleanedCommand = clipboardContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if (cleanedCommand.hasPrefix("'") && cleanedCommand.hasSuffix("'")) ||
+                                   (cleanedCommand.hasPrefix("\"") && cleanedCommand.hasSuffix("\"")) {
+                                    cleanedCommand = String(cleanedCommand.dropFirst().dropLast())
+                                }
+                                editingValues.command = cleanedCommand
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Paste from clipboard")
+                    }
+                    
+                    // Action buttons
+                    HStack {
+                        Button("Test Now") {
+                            taskManager.testClaudeCommand(task)
+                        }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .foregroundColor(.blue)
+
+                        
+                        Spacer()
+                        
+                        Button("Save") {
+                            onSave()
+                        }
+                        .font(.caption)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+                .background(Color.gray.opacity(0.05))
+                .cornerRadius(8)
+            }
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(8)
     }
 }
 
@@ -794,4 +861,9 @@ struct ModelBreakdownView: View {
         .background(Color.gray.opacity(0.05))
         .cornerRadius(6)
     }
+}
+
+#Preview {
+    ContentView()
+        .environmentObject(ClaudeUsageMonitor())
 }

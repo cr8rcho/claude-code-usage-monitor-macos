@@ -2,6 +2,25 @@ import Foundation
 import UserNotifications
 import AppKit
 
+struct ScheduledTask: Codable, Identifiable {
+    let id: UUID
+    var time: Date
+    var workingDirectory: String
+    var command: String
+    var isEnabled: Bool
+    var lastExecutionDate: Date?
+    var lastExecutionStatus: String?
+    
+    init(id: UUID = UUID(), time: Date = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date(), 
+         workingDirectory: String = NSHomeDirectory(), command: String = "hi", isEnabled: Bool = false) {
+        self.id = id
+        self.time = time
+        self.workingDirectory = workingDirectory
+        self.command = command
+        self.isEnabled = isEnabled
+    }
+}
+
 enum ExecutionStatus {
     case never
     case success(Date)
@@ -10,113 +29,177 @@ enum ExecutionStatus {
 }
 
 class ScheduledTaskManager: ObservableObject {
-    @Published var isEnabled: Bool = false
-    @Published var scheduledTime: Date = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
-    @Published var nextRunDate: Date?
-    @Published var lastExecutionStatus: ExecutionStatus = .never
-    @Published var workingDirectory: String = NSHomeDirectory()
-    @Published var command: String = "hi"
+    @Published var scheduledTasks: [ScheduledTask] = []
+    @Published var nextRunDates: [UUID: Date] = [:]
+    @Published var executionStatuses: [UUID: ExecutionStatus] = [:]
     
-    private var timer: Timer?
+    private var timers: [UUID: Timer] = [:]
     private let userDefaults = UserDefaults.standard
     
     // Keys for UserDefaults
-    private let enabledKey = "scheduledTaskEnabled"
-    private let timeKey = "scheduledTaskTime"
-    private let lastExecutionKey = "lastExecutionDate"
-    private let lastExecutionStatusKey = "lastExecutionStatus"
-    private let workingDirectoryKey = "scheduledTaskWorkingDirectory"
-    private let commandKey = "scheduledTaskCommand"
+    private let tasksKey = "scheduledTasks"
+    private let legacyEnabledKey = "scheduledTaskEnabled"
+    private let legacyTimeKey = "scheduledTaskTime"
+    private let legacyWorkingDirectoryKey = "scheduledTaskWorkingDirectory"
+    private let legacyCommandKey = "scheduledTaskCommand"
     
     init() {
         loadSettings()
-        if isEnabled {
-            scheduleTask()
+        // Schedule all enabled tasks
+        for task in scheduledTasks where task.isEnabled {
+            scheduleTask(task)
         }
     }
     
     deinit {
-        timer?.invalidate()
+        for timer in timers.values {
+            timer.invalidate()
+        }
     }
     
     private func loadSettings() {
-        isEnabled = userDefaults.bool(forKey: enabledKey)
+        // Try to load new format first
+        if let tasksData = userDefaults.data(forKey: tasksKey),
+           let tasks = try? JSONDecoder().decode([ScheduledTask].self, from: tasksData) {
+            scheduledTasks = tasks
+            // Load execution statuses
+            for task in tasks {
+                if let lastExecDate = task.lastExecutionDate,
+                   let statusString = task.lastExecutionStatus {
+                    switch statusString {
+                    case "success":
+                        executionStatuses[task.id] = .success(lastExecDate)
+                    case let status where status.hasPrefix("failed:"):
+                        let errorMessage = String(status.dropFirst(7))
+                        executionStatuses[task.id] = .failed(lastExecDate, errorMessage)
+                    default:
+                        executionStatuses[task.id] = .never
+                    }
+                } else {
+                    executionStatuses[task.id] = .never
+                }
+            }
+        } else {
+            // Migrate from old format if exists
+            migrateFromLegacySettings()
+        }
+    }
+    
+    private func migrateFromLegacySettings() {
+        let isEnabled = userDefaults.bool(forKey: legacyEnabledKey)
         
-        if let savedTimeData = userDefaults.data(forKey: timeKey),
+        var scheduledTime = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
+        if let savedTimeData = userDefaults.data(forKey: legacyTimeKey),
            let savedTime = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSDate.self, from: savedTimeData) as Date? {
             scheduledTime = savedTime
         }
         
-        // Load working directory and command
-        if let savedWorkingDir = userDefaults.string(forKey: workingDirectoryKey) {
+        var workingDirectory = NSHomeDirectory()
+        if let savedWorkingDir = userDefaults.string(forKey: legacyWorkingDirectoryKey) {
             workingDirectory = savedWorkingDir
         }
         
-        if let savedCommand = userDefaults.string(forKey: commandKey) {
+        var command = "hi"
+        if let savedCommand = userDefaults.string(forKey: legacyCommandKey) {
             command = savedCommand
         }
         
-        // Load last execution status
-        if let lastExecDate = userDefaults.object(forKey: lastExecutionKey) as? Date,
-           let statusString = userDefaults.string(forKey: lastExecutionStatusKey) {
-            switch statusString {
-            case "success":
-                lastExecutionStatus = .success(lastExecDate)
-            case let status where status.hasPrefix("failed:"):
-                let errorMessage = String(status.dropFirst(7))
-                lastExecutionStatus = .failed(lastExecDate, errorMessage)
-            default:
-                lastExecutionStatus = .never
-            }
+        // Create a task from legacy settings
+        if isEnabled || command != "hi" {
+            let legacyTask = ScheduledTask(
+                time: scheduledTime,
+                workingDirectory: workingDirectory,
+                command: command,
+                isEnabled: isEnabled
+            )
+            scheduledTasks = [legacyTask]
+            executionStatuses[legacyTask.id] = .never
+            saveSettings()
+            
+            // Clear legacy settings
+            userDefaults.removeObject(forKey: legacyEnabledKey)
+            userDefaults.removeObject(forKey: legacyTimeKey)
+            userDefaults.removeObject(forKey: legacyWorkingDirectoryKey)
+            userDefaults.removeObject(forKey: legacyCommandKey)
         }
     }
     
     func saveSettings() {
-        userDefaults.set(isEnabled, forKey: enabledKey)
-        userDefaults.set(workingDirectory, forKey: workingDirectoryKey)
-        userDefaults.set(command, forKey: commandKey)
+        // Update last execution status in tasks
+        for i in 0..<scheduledTasks.count {
+            let task = scheduledTasks[i]
+            if let status = executionStatuses[task.id] {
+                switch status {
+                case .success(let date):
+                    scheduledTasks[i].lastExecutionDate = date
+                    scheduledTasks[i].lastExecutionStatus = "success"
+                case .failed(let date, let error):
+                    scheduledTasks[i].lastExecutionDate = date
+                    scheduledTasks[i].lastExecutionStatus = "failed:\(error)"
+                default:
+                    break
+                }
+            }
+        }
         
-        if let timeData = try? NSKeyedArchiver.archivedData(withRootObject: scheduledTime, requiringSecureCoding: false) {
-            userDefaults.set(timeData, forKey: timeKey)
+        if let tasksData = try? JSONEncoder().encode(scheduledTasks) {
+            userDefaults.set(tasksData, forKey: tasksKey)
         }
     }
     
-    func saveWorkingDirectory(_ directory: String) {
-        workingDirectory = directory
+    func addTask() -> ScheduledTask {
+        let newTask = ScheduledTask()
+        scheduledTasks.append(newTask)
+        executionStatuses[newTask.id] = .never
         saveSettings()
+        return newTask
     }
     
-    func saveCommand(_ cmd: String) {
-        command = cmd
-        saveSettings()
-    }
-    
-    func setEnabled(_ enabled: Bool) {
-        isEnabled = enabled
-        saveSettings()
-        
-        if enabled {
-            scheduleTask()
-        } else {
-            stopTask()
+    func deleteTask(_ task: ScheduledTask) {
+        if let index = scheduledTasks.firstIndex(where: { $0.id == task.id }) {
+            let removedTask = scheduledTasks.remove(at: index)
+            stopTask(removedTask)
+            executionStatuses.removeValue(forKey: removedTask.id)
+            nextRunDates.removeValue(forKey: removedTask.id)
+            saveSettings()
         }
     }
     
-    func setTime(_ time: Date) {
-        scheduledTime = time
-        saveSettings()
-        
-        if isEnabled {
-            scheduleTask()
+    func updateTask(_ task: ScheduledTask) {
+        if let index = scheduledTasks.firstIndex(where: { $0.id == task.id }) {
+            scheduledTasks[index] = task
+            saveSettings()
+            
+            // Reschedule if needed
+            if task.isEnabled {
+                scheduleTask(task)
+            } else {
+                stopTask(task)
+            }
         }
     }
     
-    private func scheduleTask() {
-        timer?.invalidate()
+    func setTaskEnabled(_ task: ScheduledTask, _ enabled: Bool) {
+        if let index = scheduledTasks.firstIndex(where: { $0.id == task.id }) {
+            scheduledTasks[index].isEnabled = enabled
+            saveSettings()
+            
+            if enabled {
+                scheduleTask(scheduledTasks[index])
+            } else {
+                stopTask(scheduledTasks[index])
+            }
+        }
+    }
+    
+    private func scheduleTask(_ task: ScheduledTask) {
+        // Cancel existing timer if any
+        timers[task.id]?.invalidate()
+        timers.removeValue(forKey: task.id)
         
         let calendar = Calendar.current
         let now = Date()
-        let timeComponents = calendar.dateComponents([.hour, .minute], from: scheduledTime)
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: task.time)
         
         // Calculate next run date
         var nextRun = calendar.nextDate(after: now, matching: timeComponents, matchingPolicy: .nextTime)
@@ -130,21 +213,26 @@ class ScheduledTaskManager: ObservableObject {
         
         guard let targetDate = nextRun else { return }
         
-        nextRunDate = targetDate
+        nextRunDates[task.id] = targetDate
         
         // Schedule timer
-        timer = Timer(fireAt: targetDate, interval: 0, target: self, selector: #selector(executeClaudeCommand), userInfo: nil, repeats: false)
+        let timer = Timer(fireAt: targetDate, interval: 0, target: self, 
+                         selector: #selector(executeClaudeCommand), 
+                         userInfo: ["taskId": task.id], repeats: false)
         
-        if let timer = timer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
+        RunLoop.main.add(timer, forMode: .common)
+        timers[task.id] = timer
     }
     
-    @objc private func executeClaudeCommand() {
+    @objc private func executeClaudeCommand(_ timer: Timer) {
+        guard let userInfo = timer.userInfo as? [String: Any],
+              let taskId = userInfo["taskId"] as? UUID,
+              let task = scheduledTasks.first(where: { $0.id == taskId }) else { return }
+        
         let executionDate = Date()
         
         DispatchQueue.main.async {
-            self.lastExecutionStatus = .running(executionDate)
+            self.executionStatuses[taskId] = .running(executionDate)
         }
         
         // Force kill Terminal if running, then open fresh and execute claude command
@@ -159,9 +247,9 @@ class ScheduledTaskManager: ObservableObject {
         tell application "Terminal"
             activate
             if (count of windows) = 0 then
-                do script "cd '\(workingDirectory)' && claude '\(command)'"
+                do script "cd '\(task.workingDirectory)' && claude '\(task.command)'"
             else
-                do script "cd '\(workingDirectory)' && claude '\(command)'" in window 1
+                do script "cd '\(task.workingDirectory)' && claude '\(task.command)'" in window 1
             end if
         end tell
         """
@@ -175,13 +263,13 @@ class ScheduledTaskManager: ObservableObject {
             DispatchQueue.main.async {
                 if let error = errorDict {
                     let errorMessage = "AppleScript error: \(error)"
-                    self.lastExecutionStatus = .failed(executionDate, errorMessage)
-                    self.saveExecutionStatus(.failed(executionDate, errorMessage))
+                    self.executionStatuses[taskId] = .failed(executionDate, errorMessage)
+                    self.saveSettings()
                     print("Failed to open Terminal: \(errorMessage)")
                 } else {
-                    self.lastExecutionStatus = .success(executionDate)
-                    self.saveExecutionStatus(.success(executionDate))
-                    self.showNotification(title: "Claude Auto Launch", body: "Executed '\(self.command)' in Terminal")
+                    self.executionStatuses[taskId] = .success(executionDate)
+                    self.saveSettings()
+                    self.showNotification(title: "Claude Auto Launch", body: "Executed '\(task.command)' in Terminal")
                     print("Terminal opened and claude command executed at \(executionDate)")
                 }
             }
@@ -189,28 +277,18 @@ class ScheduledTaskManager: ObservableObject {
         
         // Reschedule for tomorrow
         DispatchQueue.main.async {
-            self.scheduleTask()
+            if let currentTask = self.scheduledTasks.first(where: { $0.id == taskId }),
+               currentTask.isEnabled {
+                self.scheduleTask(currentTask)
+            }
         }
     }
     
     
-    private func stopTask() {
-        timer?.invalidate()
-        timer = nil
-        nextRunDate = nil
-    }
-    
-    private func saveExecutionStatus(_ status: ExecutionStatus) {
-        switch status {
-        case .success(let date):
-            userDefaults.set(date, forKey: lastExecutionKey)
-            userDefaults.set("success", forKey: lastExecutionStatusKey)
-        case .failed(let date, let error):
-            userDefaults.set(date, forKey: lastExecutionKey)
-            userDefaults.set("failed:\(error)", forKey: lastExecutionStatusKey)
-        default:
-            break
-        }
+    private func stopTask(_ task: ScheduledTask) {
+        timers[task.id]?.invalidate()
+        timers.removeValue(forKey: task.id)
+        nextRunDates.removeValue(forKey: task.id)
     }
     
     private func showNotification(title: String, body: String) {
@@ -231,8 +309,12 @@ class ScheduledTaskManager: ObservableObject {
         }
     }
     
-    func testClaudeCommand() {
-        executeClaudeCommand()
+    func testClaudeCommand(_ task: ScheduledTask) {
+        // Create a timer with task info and execute immediately
+        let timer = Timer(fireAt: Date(), interval: 0, target: self,
+                         selector: #selector(executeClaudeCommand),
+                         userInfo: ["taskId": task.id], repeats: false)
+        executeClaudeCommand(timer)
     }
     
     func checkClaudeCommand() {
@@ -263,8 +345,8 @@ class ScheduledTaskManager: ObservableObject {
         }
     }
     
-    func getNextRunString() -> String {
-        guard let nextRun = nextRunDate else { return "Not scheduled" }
+    func getNextRunString(_ task: ScheduledTask) -> String {
+        guard let nextRun = nextRunDates[task.id] else { return "Not scheduled" }
         
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
@@ -280,8 +362,9 @@ class ScheduledTaskManager: ObservableObject {
         }
     }
     
-    func getExecutionStatusString() -> String {
-        switch lastExecutionStatus {
+    func getExecutionStatusString(_ task: ScheduledTask) -> String {
+        let status = executionStatuses[task.id] ?? .never
+        switch status {
         case .never:
             return "Never executed"
         case .success(let date):
@@ -297,8 +380,9 @@ class ScheduledTaskManager: ObservableObject {
         }
     }
     
-    func getExecutionStatusColor() -> NSColor {
-        switch lastExecutionStatus {
+    func getExecutionStatusColor(_ task: ScheduledTask) -> NSColor {
+        let status = executionStatuses[task.id] ?? .never
+        switch status {
         case .never:
             return .secondaryLabelColor
         case .success:
