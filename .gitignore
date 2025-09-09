@@ -35,3 +35,6 @@ output/
 # Test executables
 Test*
 !Test*.swift
+
+# Update Logs
+/UPDATELOG

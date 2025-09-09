@@ -862,8 +862,3 @@ struct ModelBreakdownView: View {
         .cornerRadius(6)
     }
 }
-
-#Preview {
-    ContentView()
-        .environmentObject(ClaudeUsageMonitor())
-}

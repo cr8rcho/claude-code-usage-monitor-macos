@@ -27,7 +27,7 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Claude Code Usage Monitor needs to access system events to monitor usage.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2025 Sapeet inc. All rights reserved.</string>
+	<string>Copyright © 2025 croatoan inc. All rights reserved.</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
 	<key>NSRequiresAquaSystemAppearance</key>

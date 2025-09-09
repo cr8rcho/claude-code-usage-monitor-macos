@@ -17,7 +17,7 @@ This is a Swift/macOS adaptation of [Claude-Code-Usage-Monitor](https://github.c
 
 ```bash
 # Clone and build
-git clone https://github.com/Sapeet/claude-code-usage-monitor-macos.git
+git clone https://github.com/cr8rcho/claude-code-usage-monitor-macos.git
 cd claude-code-usage-monitor-macos
 
 # Build and create app bundle
