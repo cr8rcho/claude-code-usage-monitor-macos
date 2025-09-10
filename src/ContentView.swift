@@ -482,7 +482,7 @@ struct AutoLoginView: View {
 
 //MARK: - Scheduled Task View
 struct ScheduledTaskView: View {
-    @StateObject private var taskManager = ScheduledTaskManager()
+    @EnvironmentObject var taskManager: ScheduledTaskManager
     @State private var expandedTasks: Set<UUID> = []
     @State private var editingTasks: [UUID: (workingDirectory: String, command: String)] = [:]
     

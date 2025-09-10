@@ -5,6 +5,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController!
     private var popoverController: PopoverController!
     private var usageMonitor: ClaudeUsageMonitor!
+    private var scheduledTaskManager: ScheduledTaskManager!
     private var timer: Timer?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -13,6 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Initialize core components
         usageMonitor = ClaudeUsageMonitor()
+        scheduledTaskManager = ScheduledTaskManager()
         
         // Initialize menu bar controller first
         menuBarController = MenuBarController(monitor: usageMonitor) { [weak self] in
@@ -21,7 +23,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Initialize popover controller with status button
         popoverController = PopoverController(
-            contentView: ContentView().environmentObject(usageMonitor),
+            contentView: ContentView()
+                .environmentObject(usageMonitor)
+                .environmentObject(scheduledTaskManager),
             statusButton: menuBarController.statusItem.button!
         )
         
