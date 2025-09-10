@@ -1,6 +1,23 @@
 import AppKit
 import SwiftUI
 
+// Custom NSPanel that can become key window
+class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool {
+        return true
+    }
+    
+    override var acceptsFirstResponder: Bool {
+        return true
+    }
+    
+    override func becomeKey() {
+        super.becomeKey()
+        // Ensure key view loop is properly set when window becomes key
+        self.recalculateKeyViewLoop()
+    }
+}
+
 // Manages popover display using borderless window
 class PopoverController: NSObject {
     private var window: NSWindow?
@@ -26,9 +43,9 @@ class PopoverController: NSObject {
         hostingController.view.wantsLayer = true
         hostingController.view.layer?.backgroundColor = NSColor.clear.cgColor
         
-        window = NSPanel(
+        window = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 535),
-            styleMask: [.borderless, .nonactivatingPanel, .hudWindow],
+            styleMask: [.borderless, .hudWindow],
             backing: .buffered,
             defer: false
         )
@@ -40,12 +57,14 @@ class PopoverController: NSObject {
         hostingController.view.autoresizingMask = [.width, .height]
         
         window?.level = .statusBar
-        window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window?.isMovableByWindowBackground = false
         window?.backgroundColor = NSColor.clear
         window?.isOpaque = false
         window?.isReleasedWhenClosed = false
         window?.hasShadow = true
+        window?.acceptsMouseMovedEvents = true
+        window?.autorecalculatesKeyViewLoop = true
         
         setupEventMonitor()
     }
@@ -80,7 +99,14 @@ class PopoverController: NSObject {
         
         window.setFrameOrigin(NSPoint(x: x, y: y))
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: false)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Ensure the window is ready to accept keyboard input
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            window.makeFirstResponder(window.contentView)
+            // Force recalculate the key view loop
+            window.recalculateKeyViewLoop()
+        }
         
         eventMonitor?.start()
     }

@@ -585,11 +585,48 @@ struct ScheduledTaskItemView: View {
     let onDelete: () -> Void
     let onSave: () -> Void
     
+    @State private var hourText: String = ""
+    @State private var minuteText: String = ""
+    
+    enum Field: Hashable {
+        case hour
+        case minute
+        case directory
+        case command
+    }
+    @FocusState private var focusedField: Field?
+    
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         return formatter
     }()
+    
+    private func initializeTimeFields() {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: task.time)
+        let minute = calendar.component(.minute, from: task.time)
+        hourText = String(format: "%02d", hour)
+        minuteText = String(format: "%02d", minute)
+    }
+    
+    private func updateTaskTime() {
+        guard let hour = Int(hourText), 
+              let minute = Int(minuteText),
+              hour >= 0, hour < 24,
+              minute >= 0, minute < 60 else { return }
+        
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month, .day], from: task.time)
+        components.hour = hour
+        components.minute = minute
+        
+        if let newTime = calendar.date(from: components) {
+            var updatedTask = task
+            updatedTask.time = newTime
+            taskManager.updateTask(updatedTask)
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -656,16 +693,55 @@ struct ScheduledTaskItemView: View {
                             .foregroundColor(.secondary)
                             .frame(width: 50, alignment: .leading)
                         
-                        DatePicker("", selection: Binding(
-                            get: { task.time },
-                            set: { newTime in
-                                var updatedTask = task
-                                updatedTask.time = newTime
-                                taskManager.updateTask(updatedTask)
+                        HStack(spacing: 2) {
+                            TextField("00", text: $hourText)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 35)
+                                .multilineTextAlignment(.center)
+                                .focused($focusedField, equals: .hour)
+                                .onSubmit {
+                                    focusedField = .minute
+                                }
+                                .onChange(of: hourText) { newValue in
+                                    // Only allow numbers and limit to 2 digits
+                                    let filtered = newValue.filter { $0.isNumber }
+                                    if filtered.count > 2 {
+                                        hourText = String(filtered.prefix(2))
+                                    } else if filtered != newValue {
+                                        hourText = filtered
+                                    }
+                                    updateTaskTime()
+                                }
+                            
+                            Text(":")
+                                .font(.system(size: 11, design: .monospaced))
+                            
+                            TextField("00", text: $minuteText)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 35)
+                                .multilineTextAlignment(.center)
+                                .focused($focusedField, equals: .minute)
+                                .onSubmit {
+                                    focusedField = .directory
+                                }
+                                .onChange(of: minuteText) { newValue in
+                                    // Only allow numbers and limit to 2 digits
+                                    let filtered = newValue.filter { $0.isNumber }
+                                    if filtered.count > 2 {
+                                        minuteText = String(filtered.prefix(2))
+                                    } else if filtered != newValue {
+                                        minuteText = filtered
+                                    }
+                                    updateTaskTime()
+                                }
+                        }
+                        .onAppear {
+                            if hourText.isEmpty && minuteText.isEmpty {
+                                initializeTimeFields()
                             }
-                        ), displayedComponents: [.hourAndMinute])
-                        .datePickerStyle(.stepperField)
-                        .labelsHidden()
+                        }
                     }
                     
                     // Working Directory
@@ -678,6 +754,10 @@ struct ScheduledTaskItemView: View {
                         TextField("Working Directory", text: $editingValues.workingDirectory)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 11, design: .monospaced))
+                            .focused($focusedField, equals: .directory)
+                            .onSubmit {
+                                focusedField = .command
+                            }
                         
                         Button("📋") {
                             if let clipboardContent = NSPasteboard.general.string(forType: .string) {
@@ -703,6 +783,11 @@ struct ScheduledTaskItemView: View {
                         TextField("Command", text: $editingValues.command)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 11, design: .monospaced))
+                            .focused($focusedField, equals: .command)
+                            .onSubmit {
+                                // Save when pressing enter on the last field
+                                onSave()
+                            }
                         
                         Button("📋") {
                             if let clipboardContent = NSPasteboard.general.string(forType: .string) {
