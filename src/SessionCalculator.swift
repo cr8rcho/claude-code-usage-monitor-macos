@@ -160,10 +160,17 @@ struct SessionCalculator {
     
     private func calculateWeightedTokens(model: String, stats: ModelStats) -> Int {
         let rawTokens = stats.inputTokens + stats.outputTokens
-        
-        if model.lowercased().contains("opus") {
-            return rawTokens * 5
-        } else if model.lowercased().contains("sonnet") {
+        let lowerModel = model.lowercased()
+
+        if lowerModel.contains("opus") {
+            if lowerModel.contains("4-1") || lowerModel.contains("4.1") {
+                // Opus 4.1: 5x multiplier
+                return rawTokens * 5
+            } else {
+                // Opus 4.5 and other Opus: 1.67x multiplier (5/3)
+                return Int(Double(rawTokens) * (5.0 / 3.0))
+            }
+        } else if lowerModel.contains("sonnet") {
             return rawTokens
         } else {
             return 0

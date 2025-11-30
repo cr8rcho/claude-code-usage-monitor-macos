@@ -853,7 +853,8 @@ struct ModelBreakdownView: View {
                             .truncationMode(.middle)
                         
                         if breakdown.model.lowercased().contains("opus") {
-                            Text("(5x)")
+                            let isOpus41 = breakdown.model.lowercased().contains("4-1") || breakdown.model.lowercased().contains("4.1")
+                            Text(isOpus41 ? "(5x)" : "(1.67x)")
                                 .font(.system(size: 10))
                                 .foregroundColor(.orange)
                                 .padding(.horizontal, 4)

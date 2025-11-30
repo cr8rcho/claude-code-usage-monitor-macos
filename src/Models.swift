@@ -73,19 +73,29 @@ struct SessionBlock {
     }
     
     // Calculate display tokens with model-specific rules
+    // Pricing (per MTok): Sonnet 4.5: $3/$15, Opus 4.5: $5/$25, Opus 4.1: $15/$75
+    // Multipliers relative to Sonnet 4.5: Opus 4.1 = 5x, Opus 4.5 = 1.67x (5/3)
     var displayTokens: Int {
-        var total = 0
+        var total: Double = 0
         for (modelName, stats) in perModelStats {
-            if modelName.lowercased().contains("opus") {
-                // Apply 5x multiplier for Opus models
-                total += (stats.inputTokens + stats.outputTokens) * 5
-            } else if modelName.lowercased().contains("sonnet") {
-                // Normal calculation for Sonnet models
-                total += stats.inputTokens + stats.outputTokens
+            let tokens = stats.inputTokens + stats.outputTokens
+            let lowerName = modelName.lowercased()
+
+            if lowerName.contains("opus") {
+                if lowerName.contains("4-1") || lowerName.contains("4.1") {
+                    // Opus 4.1: 5x multiplier ($15/$75 vs $3/$15)
+                    total += Double(tokens) * 5.0
+                } else {
+                    // Opus 4.5 and other Opus: 1.67x multiplier ($5/$25 vs $3/$15)
+                    total += Double(tokens) * (5.0 / 3.0)
+                }
+            } else if lowerName.contains("sonnet") {
+                // Sonnet models: 1x (baseline)
+                total += Double(tokens)
             }
             // Other models are ignored (not added to total)
         }
-        return total
+        return Int(total)
     }
     
     // Raw tokens for burn rate calculation
